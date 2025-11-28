@@ -134,7 +134,7 @@ build_xar
 
 ## Apple TAPI Library ##
 
-if [ $NEED_TAPI_SUPPORT -eq 1 ]; then
+if [[ $NEED_TAPI_SUPPORT -eq 1 && ! "$SKIP_TAPI_BUILD" == yes ]]; then
   get_sources https://github.com/tpoechtrager/apple-libtapi.git 1300.6.5
 
   if [ $f_res -eq 1 ]; then
@@ -151,11 +151,10 @@ fi
 CCTOOLS_VERSION=986
 LINKER_VERSION=711
 
-get_sources \
-  https://github.com/tpoechtrager/cctools-port.git \
-  $CCTOOLS_VERSION-ld64-$LINKER_VERSION
-
-if [ $f_res -eq 1 ]; then
+if [[ $f_res -eq 1 && "$SKIP_CCTOOLS_BUILD" != "yes" ]]; then
+  get_sources \
+    https://github.com/tpoechtrager/cctools-port.git \
+    $CCTOOLS_VERSION-ld64-$LINKER_VERSION
   pushd $CURRENT_BUILD_PROJECT_NAME/cctools &>/dev/null
   echo ""
 
@@ -239,6 +238,22 @@ fi
 if [ ! -d "$SDK_DIR/MacOSX$SDK_VERSION.sdk" ]; then
   echo "Broken SDK! '$SDK_DIR/MacOSX$SDK_VERSION.sdk' does not exist!"
   exit 1
+fi
+
+extract "$TARBALL_DIR/iPhoneOS$SDK_VERSION.sdk.tar.xz"
+rm -rf $SDK_DIR/iPhoneOS$SDK_VERSION* 2>/dev/null
+if [ "$(ls -l SDKs/iPhoneOS*$SDK_VERSION* 2>/dev/null | wc -l | tr -d ' ')" != "0" ]; then
+  mv -f SDKs/iPhoneOS*$SDK_VERSION* $SDK_DIR
+else
+  mv -f iPhoneOS*$SDK_VERSION*sdk* $SDK_DIR 2>/dev/null || true
+fi
+
+extract "$TARBALL_DIR/iPhoneSimulator$SDK_VERSION.sdk.tar.xz"
+rm -rf $SDK_DIR/iPhoneSimulator$SDK_VERSION* 2>/dev/null
+if [ "$(ls -l SDKs/iPhoneSimulator*$SDK_VERSION* 2>/dev/null | wc -l | tr -d ' ')" != "0" ]; then
+  mv -f SDKs/iPhoneSimulator*$SDK_VERSION* $SDK_DIR
+else
+  mv -f iPhoneSimulator*$SDK_VERSION*sdk* $SDK_DIR 2>/dev/null || true
 fi
 
 ## Fix broken SDKs ##
@@ -378,9 +393,31 @@ for ARCH in $SUPPORTED_ARCHS; do
     req=""           # May fail
   fi
 
-  test_compiler $ARCH-apple-$TARGET-clang   $BASE_DIR/oclang/test.c   "$req"
-  test_compiler $ARCH-apple-$TARGET-clang++ $BASE_DIR/oclang/test.cpp "$req"
+  # The wrapper target is "darwin", not "darwin25.1"
+  # Use arm64-apple-darwin (not aarch64-apple-darwin) for consistency
+  test_compiler $ARCH-apple-darwin-clang   $BASE_DIR/oclang/test.c   "$req"
+  test_compiler $ARCH-apple-darwin-clang++ $BASE_DIR/oclang/test.cpp "$req"
 done
+
+# Test iOS compilers if iOS SDKs are available
+if [ -d "$SDK_DIR/iPhoneOS$SDK_VERSION.sdk" ]; then
+  echo ""
+  echo "Testing iOS compilers..."
+  if arch_supported arm64; then
+    test_compiler aarch64-apple-ios-clang   $BASE_DIR/oclang/test.c   ""
+    test_compiler aarch64-apple-ios-clang++ $BASE_DIR/oclang/test.cpp ""
+  fi
+fi
+
+# Test iOS Simulator compilers if iOS Simulator SDKs are available
+if [ -d "$SDK_DIR/iPhoneSimulator$SDK_VERSION.sdk" ]; then
+  echo ""
+  echo "Testing iOS Simulator compilers..."
+  if arch_supported arm64; then
+    test_compiler aarch64-apple-ios-simulator-clang   $BASE_DIR/oclang/test.c   ""
+    test_compiler aarch64-apple-ios-simulator-clang++ $BASE_DIR/oclang/test.cpp ""
+  fi
+fi
 
 echo ""
 echo "Do not forget to add"

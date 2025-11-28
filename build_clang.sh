@@ -125,7 +125,10 @@ pushd $TARBALL_DIR &>/dev/null
 if [ $GITPROJECT == "apple" ]; then
   # Resuming downloads of branch archives is not possible.
   # Always download them newly.
-  rm -f $(basename $CLANG_LLVM_PKG)
+  if [[ ! "$SKIP_DOWNLOAD" == "yes" ]];
+  then
+    rm -f $(basename $CLANG_LLVM_PKG)
+  fi
 fi
 
 download $CLANG_LLVM_PKG

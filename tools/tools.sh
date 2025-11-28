@@ -36,6 +36,7 @@ function set_path_vars()
     export PATCH_DIR=$PWD/patches
     export SDK_DIR=$TARGET_DIR/SDK
   fi
+  export PATH="$TARGET_DIR/SDK/tools/bin/:$TARGET_DIR/bin/:$PATH"
 }
 
 set_path_vars
@@ -72,6 +73,16 @@ function require()
   if ! command -v $1 &>/dev/null; then
     echo "Required dependency '$1' is not installed" 1>&2
     exit 1
+  fi
+}
+
+function wgit()
+{
+  if [[ "$SKIP_GIT" == "yes" ]];
+  then
+    echo skipped: git $@
+  else
+    git $@
   fi
 }
 
@@ -293,7 +304,7 @@ function git_clone_repository
     cp -r $TP_OSXCROSS_DEV/$project_name .
     if [ -e ${project_name}/.git ]; then
       pushd $project_name &>/dev/null
-      git clean -fdx &>/dev/null
+      wgit clean -fdx &>/dev/null
       popd &>/dev/null
     fi
     f_res=1
@@ -307,24 +318,24 @@ function git_clone_repository
   fi
 
   if [ ! -d $project_name ]; then
-    git clone $url $project_name $git_extra_opts
+    wgit clone $url $project_name $git_extra_opts
   fi
 
   pushd $project_name &>/dev/null
 
-  git reset --hard &>/dev/null
-  git clean -fdx &>/dev/null
+  wgit reset --hard &>/dev/null
+  wgit clean -fdx &>/dev/null
 
-  if git show-ref refs/heads/$branch &>/dev/null; then
-    git fetch origin $branch
+  if wgit show-ref refs/heads/$branch &>/dev/null; then
+    wgit fetch origin $branch
   else
-    git fetch origin $branch:$branch $git_extra_opts
+    wgit fetch origin $branch:$branch $git_extra_opts
   fi
-  
-  git checkout $branch
-  git pull origin $branch
 
-  local new_hash=$(git rev-parse HEAD)
+  wgit checkout $branch
+  wgit pull origin $branch
+
+  local new_hash=$(wgit rev-parse HEAD)
   local old_hash=""
   local hash_file="$BUILD_DIR/.${project_name}_git_hash"
 
@@ -369,7 +380,7 @@ function build_msg()
     echo "## Building $1 ##"
   fi
 
-  echo "" 
+  echo ""
 }
 
 # f_res=1 = build the project
@@ -418,6 +429,11 @@ function get_sources()
 
 function download()
 {
+  if [[ "$SKIP_DOWNLOAD" == "yes" ]];
+  then
+    echo "skipped download $@"
+    return 0
+  fi
   local uri=$1
   local filename=$(basename $1)
 
@@ -521,6 +537,11 @@ function test_compiler_cxx2b()
 
 function build_xar()
 {
+  if [[ "$SKIP_BUILD_XAR" == yes ]];
+  then
+    echo "skip: build_xar"
+    return 0
+  fi
   pushd $BUILD_DIR &>/dev/null
 
   get_sources https://github.com/tpoechtrager/xar.git master
@@ -540,6 +561,11 @@ function build_xar()
 
 function build_p7zip()
 {
+  if [[ "$SKIP_BUILD_P7ZIP" == yes ]];
+  then
+    echo "skipping: build_p7zip"
+    return 0
+  fi
   get_sources https://github.com/tpoechtrager/p7zip.git master
 
   if [ $f_res -eq 1 ]; then
@@ -563,6 +589,11 @@ function build_p7zip()
 
 function build_pbxz()
 {
+  if [[ "$SKIP_BUILD_PBXZ" == yes ]];
+  then
+    echo "skipping: build_pbxz"
+    return 0
+  fi
   get_sources https://github.com/tpoechtrager/pbzx.git master
 
   if [ $f_res -eq 1 ]; then

@@ -406,15 +406,42 @@ bool detectTarget(int argc, char **argv, Target &target) {
 
     cmd += 6;
 
-    if (strncmp(cmd, "darwin", 6))
+    // Check for darwin, ios, or ios-simulator targets
+    if (!strncmp(cmd, "darwin", 6)) {
+      cmd += 6;
+      target.target = "darwin";
+      // Check if there's a version number after "darwin" (e.g., "darwin25.1")
+      if (*cmd && *cmd != '-') {
+        // There's a version number, parse it
+        if (!(p = strchr(cmd, '-')))
+          return false;
+        target.target = std::string("darwin") + std::string(cmd, p - cmd);
+        target.compiler = getCompilerIdentifier(&p[1]);
+        target.compilername = &p[1];
+      } else {
+        // No version number, just "darwin"
+        if (!(p = strchr(cmd, '-')))
+          return false;
+        target.compiler = getCompilerIdentifier(&p[1]);
+        target.compilername = &p[1];
+      }
+    } else if (!strncmp(cmd, "ios-simulator", 13)) {
+      cmd += 13;
+      target.target = "ios-simulator";
+      if (!(p = strchr(cmd, '-')))
+        return false;
+      target.compiler = getCompilerIdentifier(&p[1]);
+      target.compilername = &p[1];
+    } else if (!strncmp(cmd, "ios", 3)) {
+      cmd += 3;
+      target.target = "ios";
+      if (!(p = strchr(cmd, '-')))
+        return false;
+      target.compiler = getCompilerIdentifier(&p[1]);
+      target.compilername = &p[1];
+    } else {
       return false;
-
-    if (!(p = strchr(cmd, '-')))
-      return false;
-
-    target.target = std::string(cmd, p - cmd);
-    target.compiler = getCompilerIdentifier(&p[1]);
-    target.compilername = &p[1];
+    }
 
     if (target.compilername == "cc") {
       target.compiler = getDefaultCompilerIdentifier();

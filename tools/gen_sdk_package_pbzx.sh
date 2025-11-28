@@ -5,11 +5,6 @@ source tools/tools.sh
 
 require cpio
 
-if [ $PLATFORM == "Darwin" ]; then
-  echo "Use gen_sdk_package.sh on macOS" 1>&2
-  exit 1
-fi
-
 if [ $# -eq 0 ]; then
   echo "Usage: $0 <xcode.xip>" 1>&2
   exit 1
@@ -30,15 +25,15 @@ pushd $TMP_DIR &>/dev/null
 echo "Extracting $XCODE (this may take several minutes) ..."
 
 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$TARGET_DIR/lib \
-  verbose_cmd "$TARGET_DIR/bin/xar -xf $XCODE -C $TMP_DIR"
+  verbose_cmd "xar -xf $XCODE -C $TMP_DIR"
 
 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$TARGET_DIR/lib \
-  verbose_cmd "$TARGET_DIR/SDK/tools/bin/pbzx -n Content | cpio -i"
+  verbose_cmd "pbzx -n Content | cpio -i"
 
 popd &>/dev/null # TMP_DIR
 popd &>/dev/null # BUILD_DIR
 
 echo ""
 
-XCODEDIR=$TMP_DIR \
+XCODEDIR=$TMP_DIR/Xcode.app \
   ./tools/gen_sdk_package.sh

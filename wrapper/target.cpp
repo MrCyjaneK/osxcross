@@ -64,11 +64,19 @@ OSVersion Target::getSDKOSNum() const {
 
     const char *SDKName = getFileName(SDKPath);
 
-    if (strncasecmp(SDKName, "MacOSX", 6))
-      return OSVersion();
+    if (!strncasecmp(SDKName, "MacOSX", 6)) {
+      return parseOSVersion(SDKName + 6);
+    } else if (!strncasecmp(SDKName, "iPhoneOS", 8)) {
+      return parseOSVersion(SDKName + 8);
+    } else if (!strncasecmp(SDKName, "iPhoneSimulator", 15)) {
+      return parseOSVersion(SDKName + 15);
+    }
 
-    return parseOSVersion(SDKName + 6);
+    return OSVersion();
   } else {
+    if (target == "ios" || target == "ios-simulator")
+      return OSVersion();
+    
     if (target.size() < 7)
       return OSVersion();
 
@@ -132,27 +140,47 @@ void Target::overrideDefaultSDKPath(const char *SDKSearchDir) {
       exit(EXIT_FAILURE);
     }
   } else {
-    // Choose the latest SDK
+
+    const char *sdkPrefix = nullptr;
+    if (this->target == "ios") {
+      sdkPrefix = "iPhoneOS";
+    } else if (this->target == "ios-simulator") {
+      sdkPrefix = "iPhoneSimulator";
+    } else {
+      sdkPrefix = "MacOSX";
+    }
 
     static OSVersion latestSDKVersion;
     static std::string latestSDK;
+    static const char *currentSDKPrefix;
 
     latestSDKVersion = OSVersion();
     latestSDK.clear();
+    currentSDKPrefix = sdkPrefix;
 
     listFiles(SDKSearchDir, nullptr, [](const char *SDK) {
+      if (strncasecmp(SDK, currentSDKPrefix, strlen(currentSDKPrefix)))
+        return false;
+      
+      OSVersion SDKVersion;
       if (!strncasecmp(SDK, "MacOSX", 6)) {
-        OSVersion SDKVersion = parseOSVersion(SDK + 6);
-        if (SDKVersion > latestSDKVersion) {
-          latestSDKVersion = SDKVersion;
-          latestSDK = SDK;
-        }
+        SDKVersion = parseOSVersion(SDK + 6);
+      } else if (!strncasecmp(SDK, "iPhoneOS", 8)) {
+        SDKVersion = parseOSVersion(SDK + 8);
+      } else if (!strncasecmp(SDK, "iPhoneSimulator", 15)) {
+        SDKVersion = parseOSVersion(SDK + 15);
+      } else {
+        return false;
+      }
+      if (SDKVersion > latestSDKVersion) {
+        latestSDKVersion = SDKVersion;
+        latestSDK = SDK;
       }
       return false;
     });
 
     if (!latestSDKVersion.Num()) {
-      err << "no SDK found in '" << SDKSearchDir << "'" << err.endl();
+      err << "no " << sdkPrefix << " SDK found in '" << SDKSearchDir << "'" << err.endl();
       exit(EXIT_FAILURE);
     }
 
@@ -172,10 +200,68 @@ bool Target::getSDKPath(std::string &path, bool MacOSX10_16Fix, bool majorVersio
   if (SDK) {
     path = SDK;
   } else {
+    path = execpath;
+    path += "/../SDK/";
+    
+    const char *sdkPrefix = nullptr;
+    if (target == "ios") {
+      sdkPrefix = "iPhoneOS";
+    } else if (target == "ios-simulator") {
+      sdkPrefix = "iPhoneSimulator";
+    } else {
+      sdkPrefix = "MacOSX";
+    }
+    
+    if (!SDKVer.Num()) {
+      std::string sdkDir = path;
+      static OSVersion latestSDKVersion;
+      static std::string latestSDK;
+      static const char *currentSDKPrefix;
+      
+      latestSDKVersion = OSVersion();
+      latestSDK.clear();
+      currentSDKPrefix = sdkPrefix;
+      
+      listFiles(sdkDir.c_str(), nullptr, [](const char *SDKName) {
+        if (strncasecmp(SDKName, currentSDKPrefix, strlen(currentSDKPrefix)))
+          return false;
+        
+        OSVersion ver;
+        if (!strncasecmp(SDKName, "MacOSX", 6)) {
+          ver = parseOSVersion(SDKName + 6);
+        } else if (!strncasecmp(SDKName, "iPhoneOS", 8)) {
+          ver = parseOSVersion(SDKName + 8);
+        } else if (!strncasecmp(SDKName, "iPhoneSimulator", 15)) {
+          ver = parseOSVersion(SDKName + 15);
+        } else {
+          return false;
+        }
+        
+        if (ver > latestSDKVersion) {
+          latestSDKVersion = ver;
+          latestSDK = SDKName;
+        }
+        return false;
+      });
+      
+      if (latestSDKVersion.Num()) {
+        path += latestSDK;
+        if (dirExists(path))
+          return true;
+      }
+      
+      const char *sdkType = (target == "ios") ? "iOS" : 
+                            (target == "ios-simulator") ? "iOS Simulator" : "macOS";
+      err << "cannot find " << sdkType << " SDK in '" << sdkDir << "'"
+          << err.endl();
+      return false;
+    }
+    
     if (MacOSX10_16Fix)
       SDKVer = OSVersion(10, 16);
-    path = execpath;
-    path += "/../SDK/MacOSX";
+    
+    path += sdkPrefix;
+    
     if (majorVersionOnly) {
       path += SDKVer.majorStr();
     } else {
@@ -194,7 +280,9 @@ bool Target::getSDKPath(std::string &path, bool MacOSX10_16Fix, bool majorVersio
     if (SDKVer.minor == 0 && !majorVersionOnly)
       return getSDKPath(path, false, true);
 
-    err << "cannot find macOS SDK (expected in: " << path << ")"
+    const char *sdkType = (target == "ios") ? "iOS" : 
+                          (target == "ios-simulator") ? "iOS Simulator" : "macOS";
+    err << "cannot find " << sdkType << " SDK (expected in: " << path << ")"
         << err.endl();
 
     return false;
@@ -549,13 +637,29 @@ bool Target::setup() {
   }
 
   std::string SDKPath;
-  OSVersion SDKOSNum = getSDKOSNum();
 
   if (!isKnownCompiler())
     warn << "unknown compiler '" << compilername << "'" << warn.endl();
 
   if (!getSDKPath(SDKPath))
     return false;
+
+  OSVersion SDKOSNum = getSDKOSNum();
+  if (!SDKOSNum.Num() && !SDK) {
+    const char *SDKName = getFileName(SDKPath);
+    if (!strncasecmp(SDKName, "MacOSX", 6)) {
+      SDKOSNum = parseOSVersion(SDKName + 6);
+      SDK = strdup(SDKPath.c_str());
+    } else if (!strncasecmp(SDKName, "iPhoneOS", 8)) {
+      SDKOSNum = parseOSVersion(SDKName + 8);
+      SDK = strdup(SDKPath.c_str());
+    } else if (!strncasecmp(SDKName, "iPhoneSimulator", 15)) {
+      SDKOSNum = parseOSVersion(SDKName + 15);
+      SDK = strdup(SDKPath.c_str());
+    }
+  } else {
+    SDKOSNum = getSDKOSNum();
+  }
 
   triple = getArchName(arch);
   triple += "-";
@@ -869,15 +973,20 @@ bool Target::setup() {
 
   if (OSNum.Num()) {
     std::string tmp;
-    tmp = "-mmacosx-version-min=";
-    if (isClang() && clangversion < ClangVersion(11, 0) &&
-        OSNum >= OSVersion(11, 0)) {
-      // Clang <= 10 can't parse -mmacosx-version-min=11.x
-      warn << "Your clang installation is outdated and can't parse '-mmacosx-version-min=" << OSNum.shortStr() << "'. "
-           << "Setting it to 10.16."  << warn.endl();
-      tmp += "10.16";
-    } else {
+    if (target == "ios" || target == "ios-simulator") {
+      tmp = "-mios-version-min=";
       tmp += OSNum.Str();
+    } else {
+      tmp = "-mmacosx-version-min=";
+      if (isClang() && clangversion < ClangVersion(11, 0) &&
+          OSNum >= OSVersion(11, 0)) {
+        // Clang <= 10 can't parse -mmacosx-version-min=11.x
+        warn << "Your clang installation is outdated and can't parse '-mmacosx-version-min=" << OSNum.shortStr() << "'. "
+             << "Setting it to 10.16."  << warn.endl();
+        tmp += "10.16";
+      } else {
+        tmp += OSNum.Str();
+      }
     }
     fargs.push_back(tmp);
   }

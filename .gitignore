@@ -1,6 +1,8 @@
 *.o
 *gcc*.tar.*
 *MacOSX*.*
+*.tar.*
+*.zip
 cpucount
 build/
 target/

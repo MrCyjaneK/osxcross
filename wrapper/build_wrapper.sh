@@ -76,7 +76,7 @@ function create_wrapper_link
 
 [ -z "$TARGETCOMPILER" ] && TARGETCOMPILER=clang
 
-TARGETTRIPLE=$(first_supported_arch)-apple-${TARGET}
+TARGETS=(darwin ios ios-simulator)
 
 FLAGS=""
 
@@ -119,56 +119,58 @@ function compile_wrapper()
     verbose_cmd $MAKE wrapper -j$JOBS
 }
 
-compile_wrapper
+for TARGET in "${TARGETS[@]}"; do
+  TARGETTRIPLE=$(first_supported_arch)-apple-${TARGET}
 
-if [ -n "$BWCOMPILEONLY" ]; then
-  exit 0
-fi
+  export TARGET
+  compile_wrapper
 
-verbose_cmd mv wrapper "${TARGET_DIR}/bin/${TARGETTRIPLE}-wrapper"
-
-pushd "${TARGET_DIR}/bin" &>/dev/null
-
-if [ $TARGETCOMPILER = "clang" ]; then
-  create_wrapper_link clang 2
-  create_wrapper_link clang++ 2
-  create_wrapper_link clang++-libc++ 2
-  create_wrapper_link clang++-stdc++ 2
-  create_wrapper_link clang++-gstdc++ 2
-elif [ $TARGETCOMPILER = "gcc" ]; then
-  create_wrapper_link gcc 2
-  create_wrapper_link g++ 2
-  create_wrapper_link g++-libc++ 2
-fi
-
-create_wrapper_link cc
-create_wrapper_link c++
-
-create_wrapper_link osxcross 1
-create_wrapper_link osxcross-conf 1
-create_wrapper_link osxcross-env 1
-create_wrapper_link osxcross-cmp 1
-create_wrapper_link osxcross-man 1
-create_wrapper_link pkg-config
-
-if [ "$PLATFORM" != "Darwin" ]; then
-  create_wrapper_link sw_vers 1
-
-  if which dsymutil &>/dev/null; then
-    # If dsymutil is in PATH then it's most likely a recent
-    # LLVM dsymutil version. In this case don't wrap it.
-    # Just create target symlinks.
-
-    for ARCH in $SUPPORTED_ARCHS; do
-      verbose_cmd create_symlink "$(which dsymutil)" "$ARCH-apple-$TARGET-dsymutil"
-    done
-  else
-    create_wrapper_link dsymutil 1
+  if [ -n "$BWCOMPILEONLY" ]; then
+    continue
   fi
 
-  create_wrapper_link xcrun 1
-  create_wrapper_link xcodebuild 1
-fi
+  verbose_cmd mv wrapper "${TARGET_DIR}/bin/${TARGETTRIPLE}-wrapper"
 
-popd &>/dev/null
+  pushd "${TARGET_DIR}/bin" &>/dev/null
+
+  if [ $TARGETCOMPILER = "clang" ]; then
+    create_wrapper_link clang 2
+    create_wrapper_link clang++ 2
+    create_wrapper_link clang++-libc++ 2
+    create_wrapper_link clang++-stdc++ 2
+    create_wrapper_link clang++-gstdc++ 2
+  elif [ $TARGETCOMPILER = "gcc" ]; then
+    create_wrapper_link gcc 2
+    create_wrapper_link g++ 2
+    create_wrapper_link g++-libc++ 2
+  fi
+
+  create_wrapper_link cc
+  create_wrapper_link c++
+
+  create_wrapper_link osxcross 1
+  create_wrapper_link osxcross-conf 1
+  create_wrapper_link osxcross-env 1
+  create_wrapper_link osxcross-cmp 1
+  create_wrapper_link osxcross-man 1
+  create_wrapper_link pkg-config
+
+  if [ "$PLATFORM" != "Darwin" ]; then
+    create_wrapper_link sw_vers 1
+
+    if which dsymutil &>/dev/null; then
+      for ARCH in $SUPPORTED_ARCHS; do
+        verbose_cmd create_symlink "$(which dsymutil)" "$ARCH-apple-$TARGET-dsymutil"
+      done
+    else
+      create_wrapper_link dsymutil 1
+    fi
+
+    create_wrapper_link xcrun 1
+    create_wrapper_link xcodebuild 1
+  fi
+
+  popd &>/dev/null
+done
+
 popd &>/dev/null
