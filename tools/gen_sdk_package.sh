@@ -49,9 +49,9 @@ function compress()
 {
   case $SDK_COMPRESSOR in
     "zip")
-      $SDK_COMPRESSOR -q -9 -r - $1 > $2 ;;
+      $SDK_COMPRESSOR -q 6 -r - $1 > $2 ;;
     *)
-      tar cf - $1 | $SDK_COMPRESSOR -9 - > $2 ;;
+      tar cf - $1 | $SDK_COMPRESSOR -6 - > $2 ;;
   esac
 }
 
@@ -71,6 +71,7 @@ WDIR=$(pwd)
 
 for pplatform in XROS XRSimulator iPhoneSimulator WatchSimulator iPhoneOS AppleTVOS MacOSX WatchOS DriverKit AppleTVSimulator;
 do
+  (
   platform="$pplatform.platform"
   cd $WDIR
 
@@ -265,4 +266,7 @@ do
         
   echo ""
   ls -lh | grep $pplatform
+  ) &
 done
+
+wait
