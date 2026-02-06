@@ -978,15 +978,15 @@ bool Target::setup() {
       tmp += OSNum.Str();
     } else {
       tmp = "-mmacosx-version-min=";
-      if (isClang() && clangversion < ClangVersion(11, 0) &&
-          OSNum >= OSVersion(11, 0)) {
-        // Clang <= 10 can't parse -mmacosx-version-min=11.x
-        warn << "Your clang installation is outdated and can't parse '-mmacosx-version-min=" << OSNum.shortStr() << "'. "
-             << "Setting it to 10.16."  << warn.endl();
-        tmp += "10.16";
-      } else {
-        tmp += OSNum.Str();
-      }
+      // if (isClang() && clangversion < ClangVersion(11, 0) &&
+      //     OSNum >= OSVersion(11, 0)) {
+      //   // Clang <= 10 can't parse -mmacosx-version-min=11.x
+      //   warn << "Your clang installation is outdated and can't parse '-mmacosx-version-min=" << OSNum.shortStr() << "'. "
+      //        << "Setting it to 10.16."  << warn.endl();
+      //   tmp += "10.16";
+      // } else {
+      tmp += OSNum.Str();
+      // }
     }
     fargs.push_back(tmp);
   }
